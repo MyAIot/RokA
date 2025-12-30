@@ -1,9 +1,16 @@
 import os
 from autocorrect import Speller
+try:
+    from underthesea import correct as vi_correct
+except ImportError:
+    vi_correct = None
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+
+# Thêm import cho dịch tự động
+from transformers import MarianMTModel, MarianTokenizer
 
 # Đọc dữ liệu từ file CSV
 # File CSV: question,answer
@@ -58,20 +65,52 @@ def main():
         model, qa_embeddings = build_embeddings(qa_questions, model_name)
         save_cache(cache_path, qa_embeddings, qa_questions, qa_answers)
     spell = Speller(lang='en')
+    if vi_correct is None:
+        print('Cảnh báo: underthesea chưa được cài, không sửa lỗi chính tả tiếng Việt.')
+
+    # Khởi tạo model dịch Anh
+    print('Đang load model dịch sang tiếng Anh...')
+    trans_model_name = 'Helsinki-NLP/opus-mt-vi-en'
+    trans_tokenizer = MarianTokenizer.from_pretrained(trans_model_name)
+    trans_model = MarianMTModel.from_pretrained(trans_model_name)
+
+    def is_vietnamese(text):
+        # Kiểm tra nếu có ký tự tiếng Việt phổ biến
+        vietnamese_chars = set('ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ')
+        return any(c in vietnamese_chars for c in text.lower())
+
+    def translate_vi_to_en(text):
+        batch = trans_tokenizer([text], return_tensors="pt", padding=True)
+        gen = trans_model.generate(**batch)
+        return trans_tokenizer.decode(gen[0], skip_special_tokens=True)
     while True:
         print('Nhập câu hỏi (để trống để thoát):')
         user_question = input('Câu hỏi: ')
         if not user_question.strip():
             print('Kết thúc.')
             break
-        corrected_question = spell(user_question)
+        # Nếu là tiếng Anh thì mới sửa lỗi chính tả, tiếng Việt giữ nguyên
+        if is_vietnamese(user_question):
+            corrected_question = user_question
+        else:
+            corrected_question = spell(user_question)
         orange = '\033[38;5;208m'
         reset = '\033[0m'
         if corrected_question != user_question:
             print(f'Câu hỏi đã sửa lỗi chính tả: {orange}{corrected_question}{reset}')
         else:
             print('Không phát hiện lỗi chính tả.')
-        matched_question, matched_answer, score = find_best_match(corrected_question, model, qa_embeddings, qa_questions, qa_answers)
+
+        # Nếu là tiếng Việt thì mới dịch sang tiếng Anh, còn tiếng Anh thì giữ nguyên
+        if is_vietnamese(corrected_question):
+            translated_question = translate_vi_to_en(corrected_question)
+            blue = '\033[1;34m'
+            print(f'Câu hỏi dịch sang tiếng Anh: {blue}{translated_question}{reset}')
+        else:
+            translated_question = corrected_question
+            print('Câu hỏi đã là tiếng Anh, không cần dịch.')
+        # Sử dụng câu hỏi đã dịch hoặc giữ nguyên để tìm câu trả lời
+        matched_question, matched_answer, score = find_best_match(translated_question, model, qa_embeddings, qa_questions, qa_answers)
         print(f'Câu hỏi gần nhất: {matched_question}')
         # In đậm và đổi màu xanh lá cho câu trả lời gợi ý
         bold_green = '\033[1;32m'
