@@ -5,5 +5,8 @@ venv310:
 
 install: venv310
 
+makeCsv:
+	source venv310/bin/activate && python extract_rok_qa.py
+
 run:
 	source venv310/bin/activate && python3 qa_ai.py
