@@ -1,10 +1,9 @@
-run:
-	venv:
-	python3 -m venv venv
-	pip3 install --upgrade pip
-	venv/bin/pip install -r requirements.txt
+venv310:
+	python3.10 -m venv venv310
+	venv310/bin/pip install --upgrade pip
+	venv310/bin/pip install -r requirements.txt
 
-install: venv
+install: venv310
 
 run:
-	source venv/bin/activate && python3 qa_ai.py
+	source venv310/bin/activate && python3 qa_ai.py

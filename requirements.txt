@@ -3,7 +3,8 @@ scikit-learn
 pandas
 
 beautifulsoup4
-transformers
 autocorrect
-underthesea
+transformers
+sentencepiece
+autocorrect
 sacremoses

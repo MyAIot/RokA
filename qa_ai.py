@@ -1,9 +1,11 @@
 import os
 from autocorrect import Speller
+from transformers import pipeline
 try:
-    from underthesea import correct as vi_correct
-except ImportError:
-    vi_correct = None
+    vi_correction = pipeline("text2text-generation", model="bmd1905/vietnamese-correction-v2")
+except Exception as e:
+    print(f"Lỗi khởi tạo model sửa lỗi chính tả tiếng Việt: {e}")
+    vi_correction = None
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -37,7 +39,10 @@ def find_best_match(query, model, embeddings, questions, answers):
     query_emb = model.encode([query], convert_to_numpy=True)
     sims = cosine_similarity(query_emb, embeddings)[0]
     idx = np.argmax(sims)
-    return questions[idx], answers[idx], sims[idx]
+    # Trả về top 3 chỉ số lớn nhất
+    top_idx = np.argsort(sims)[::-1][:3]
+    top_qas = [(questions[i], answers[i], sims[i]) for i in top_idx]
+    return top_qas
 
 def answer_mc_question(user_question, choices, model, qa_questions, qa_answers, qa_embeddings):
     # Ghép từng đáp án vào câu hỏi, tính similarity với các câu hỏi gốc
@@ -65,8 +70,8 @@ def main():
         model, qa_embeddings = build_embeddings(qa_questions, model_name)
         save_cache(cache_path, qa_embeddings, qa_questions, qa_answers)
     spell = Speller(lang='en')
-    if vi_correct is None:
-        print('Cảnh báo: underthesea chưa được cài, không sửa lỗi chính tả tiếng Việt.')
+    if vi_correction is None:
+        print('Cảnh báo: Không có model sửa lỗi chính tả tiếng Việt.')
 
     # Khởi tạo model dịch Anh
     print('Đang load model dịch sang tiếng Anh...')
@@ -89,8 +94,10 @@ def main():
         if not user_question.strip():
             print('Kết thúc.')
             break
-        # Nếu là tiếng Anh thì mới sửa lỗi chính tả, tiếng Việt giữ nguyên
-        if is_vietnamese(user_question):
+        # Sửa lỗi chính tả tiếng Việt bằng transformers pipeline nếu có, còn lại dùng autocorrect cho tiếng Anh
+        if is_vietnamese(user_question) and vi_correction is not None:
+            corrected_question = vi_correction(user_question)[0]['generated_text']
+        elif is_vietnamese(user_question):
             corrected_question = user_question
         else:
             corrected_question = spell(user_question)
@@ -109,12 +116,19 @@ def main():
         else:
             translated_question = corrected_question
             print('Câu hỏi đã là tiếng Anh, không cần dịch.')
-        # Sử dụng câu hỏi đã dịch hoặc giữ nguyên để tìm câu trả lời
-        matched_question, matched_answer, score = find_best_match(translated_question, model, qa_embeddings, qa_questions, qa_answers)
-        print(f'Câu hỏi gần nhất: {matched_question}')
-        # In đậm và đổi màu xanh lá cho câu trả lời gợi ý
+        # Sử dụng câu hỏi đã dịch hoặc giữ nguyên để tìm top 3 câu trả lời
+        top_qas = find_best_match(translated_question, model, qa_embeddings, qa_questions, qa_answers)
+        # Câu trả lời gợi ý nhất (đậm, xanh lá)
+        matched_question, matched_answer, score = top_qas[0]
         bold_green = '\033[1;32m'
+        print(f'Câu hỏi gần nhất: {matched_question}')
         print(f'Câu trả lời gợi ý: {bold_green}{matched_answer}{reset} (score: {score:.2f})')
+        # Hiển thị thêm 2 câu và đáp án gần giống nhất tiếp theo (màu xanh nhạt)
+        light_green = '\033[0;32m'
+        for i in range(1, 3):
+            q, a, s = top_qas[i]
+            print(f'Gợi ý phụ #{i}: {q}')
+            print(f'{light_green}Đáp án phụ: {a}{reset} (score: {s:.2f})')
 
 if __name__ == '__main__':
     main()
