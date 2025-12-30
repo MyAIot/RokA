@@ -1,3 +1,4 @@
+import os
 from autocorrect import Speller
 import pandas as pd
 from sentence_transformers import SentenceTransformer
@@ -17,6 +18,13 @@ def build_embeddings(questions, model_name='sentence-transformers/all-mpnet-base
     model = SentenceTransformer(model_name)
     embeddings = model.encode(questions, convert_to_numpy=True)
     return model, embeddings
+
+def save_cache(cache_path, embeddings, questions, answers):
+    np.savez_compressed(cache_path, embeddings=embeddings, questions=questions, answers=answers)
+
+def load_cache(cache_path):
+    data = np.load(cache_path, allow_pickle=True)
+    return data['embeddings'], data['questions'].tolist(), data['answers'].tolist()
 
 def find_best_match(query, model, embeddings, questions, answers):
     query_emb = model.encode([query], convert_to_numpy=True)
@@ -38,8 +46,17 @@ def answer_mc_question(user_question, choices, model, qa_questions, qa_answers, 
 
 def main():
     csv_path = 'rok_qa.csv'
-    qa_questions, qa_answers = load_qa_data(csv_path)
-    model, qa_embeddings = build_embeddings(qa_questions)
+    cache_path = 'rok_qa_cache.npz'
+    model_name = 'sentence-transformers/all-mpnet-base-v2'
+    if os.path.exists(cache_path):
+        print('Đang load embeddings từ cache...')
+        qa_embeddings, qa_questions, qa_answers = load_cache(cache_path)
+        model = SentenceTransformer(model_name)
+    else:
+        print('Đang build embeddings, lần đầu sẽ hơi lâu...')
+        qa_questions, qa_answers = load_qa_data(csv_path)
+        model, qa_embeddings = build_embeddings(qa_questions, model_name)
+        save_cache(cache_path, qa_embeddings, qa_questions, qa_answers)
     spell = Speller(lang='en')
     while True:
         print('Nhập câu hỏi (để trống để thoát):')
@@ -62,3 +79,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# Hướng dẫn build file exe:
+# 1. Cài pyinstaller: pip install pyinstaller
+# 2. Build: pyinstaller --onefile qa_ai.py
+# File exe sẽ nằm trong thư mục dist/
