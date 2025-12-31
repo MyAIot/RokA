@@ -11,16 +11,19 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
-# Thêm import cho dịch tự động
-from transformers import MarianMTModel, MarianTokenizer
+
 
 # Đọc dữ liệu từ file CSV
 # File CSV: question,answer
 
-def load_qa_data(csv_path):
+def load_qa_data(csv_path, use_vietnamese=False):
     df = pd.read_csv(csv_path)
-    questions = df['question'].tolist()
-    answers = df['answer'].tolist()
+    if use_vietnamese and 'question_vi' in df.columns and 'answer_vi' in df.columns:
+        questions = df['question_vi'].fillna('').tolist()
+        answers = df['answer_vi'].fillna('').tolist()
+    else:
+        questions = df['question'].tolist()
+        answers = df['answer'].tolist()
     return questions, answers
 
 def build_embeddings(questions, model_name='sentence-transformers/all-mpnet-base-v2'):
@@ -58,37 +61,42 @@ def answer_mc_question(user_question, choices, model, qa_questions, qa_answers, 
 
 def main():
     csv_path = 'rok_qa.csv'
-    cache_path = 'rok_qa_cache.npz'
     model_name = 'sentence-transformers/all-mpnet-base-v2'
+    # Chọn ngôn ngữ khi khởi động
+    print('Chọn ngôn ngữ dữ liệu:')
+    print('1. Tiếng Anh')
+    print('2. Tiếng Việt')
+    lang_choice = input('Nhập 1 hoặc 2 (mặc định 1): ').strip()
+    if lang_choice == '2':
+        use_vietnamese = True
+        cache_path = 'rok_qa_cache_vi.npz'
+        print('Sử dụng dữ liệu tiếng Việt.')
+    else:
+        use_vietnamese = False
+        cache_path = 'rok_qa_cache_en.npz'
+        print('Sử dụng dữ liệu tiếng Anh.')
+
     if os.path.exists(cache_path):
         print('Đang load embeddings từ cache...')
         qa_embeddings, qa_questions, qa_answers = load_cache(cache_path)
         model = SentenceTransformer(model_name)
     else:
         print('Đang build embeddings, lần đầu sẽ hơi lâu...')
-        qa_questions, qa_answers = load_qa_data(csv_path)
+        qa_questions, qa_answers = load_qa_data(csv_path, use_vietnamese=use_vietnamese)
         model, qa_embeddings = build_embeddings(qa_questions, model_name)
         save_cache(cache_path, qa_embeddings, qa_questions, qa_answers)
     spell = Speller(lang='en')
     if vi_correction is None:
         print('Cảnh báo: Không có model sửa lỗi chính tả tiếng Việt.')
 
-    # Khởi tạo model dịch Anh
-    print('Đang load model dịch sang tiếng Anh...')
-    trans_model_name = 'Helsinki-NLP/opus-mt-vi-en'
-    trans_tokenizer = MarianTokenizer.from_pretrained(trans_model_name)
-    trans_model = MarianMTModel.from_pretrained(trans_model_name)
+
 
     def is_vietnamese(text):
         # Kiểm tra nếu có ký tự tiếng Việt phổ biến
         vietnamese_chars = set('ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ')
         return any(c in vietnamese_chars for c in text.lower())
-
-    def translate_vi_to_en(text):
-        batch = trans_tokenizer([text], return_tensors="pt", padding=True)
-        gen = trans_model.generate(**batch)
-        return trans_tokenizer.decode(gen[0], skip_special_tokens=True)
     while True:
+        print("\n" + "="*50)
         print('Nhập câu hỏi (để trống để thoát):')
         user_question = input('Câu hỏi: ')
         if not user_question.strip():
@@ -108,16 +116,10 @@ def main():
         else:
             print('Không phát hiện lỗi chính tả.')
 
-        # Nếu là tiếng Việt thì mới dịch sang tiếng Anh, còn tiếng Anh thì giữ nguyên
-        if is_vietnamese(corrected_question):
-            translated_question = translate_vi_to_en(corrected_question)
-            blue = '\033[1;34m'
-            print(f'Câu hỏi dịch sang tiếng Anh: {blue}{translated_question}{reset}')
-        else:
-            translated_question = corrected_question
-            print('Câu hỏi đã là tiếng Anh, không cần dịch.')
-        # Sử dụng câu hỏi đã dịch hoặc giữ nguyên để tìm top 3 câu trả lời
-        top_qas = find_best_match(translated_question, model, qa_embeddings, qa_questions, qa_answers)
+
+        # Tìm kiếm trên ngôn ngữ đã chọn
+        top_qas = find_best_match(corrected_question, model, qa_embeddings, qa_questions, qa_answers)
+
         # Câu trả lời gợi ý nhất (đậm, xanh lá)
         matched_question, matched_answer, score = top_qas[0]
         bold_green = '\033[1;32m'

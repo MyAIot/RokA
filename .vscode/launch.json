@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Debug extract_rok_qa.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/extract_rok_qa.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Debug test-translate.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test-translate.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}
