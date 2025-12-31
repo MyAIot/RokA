@@ -6,7 +6,6 @@ try:
 except Exception as e:
     print(f"Lỗi khởi tạo model sửa lỗi chính tả tiếng Việt: {e}")
     vi_correction = None
-import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -15,24 +14,6 @@ import numpy as np
 
 # Đọc dữ liệu từ file CSV
 # File CSV: question,answer
-
-def load_qa_data(csv_path, use_vietnamese=False):
-    df = pd.read_csv(csv_path)
-    if use_vietnamese and 'question_vi' in df.columns and 'answer_vi' in df.columns:
-        questions = df['question_vi'].fillna('').tolist()
-        answers = df['answer_vi'].fillna('').tolist()
-    else:
-        questions = df['question'].tolist()
-        answers = df['answer'].tolist()
-    return questions, answers
-
-def build_embeddings(questions, model_name='sentence-transformers/all-mpnet-base-v2'):
-    model = SentenceTransformer(model_name)
-    embeddings = model.encode(questions, convert_to_numpy=True)
-    return model, embeddings
-
-def save_cache(cache_path, embeddings, questions, answers):
-    np.savez_compressed(cache_path, embeddings=embeddings, questions=questions, answers=answers)
 
 def load_cache(cache_path):
     data = np.load(cache_path, allow_pickle=True)
@@ -60,7 +41,6 @@ def answer_mc_question(user_question, choices, model, qa_questions, qa_answers, 
     return best_choice, best_score
 
 def main():
-    csv_path = 'rok_qa.csv'
     model_name = 'sentence-transformers/all-mpnet-base-v2'
     # Chọn ngôn ngữ khi khởi động
     print('Chọn ngôn ngữ dữ liệu:')
@@ -69,11 +49,11 @@ def main():
     lang_choice = input('Nhập 1 hoặc 2 (mặc định 1): ').strip()
     if lang_choice == '2':
         use_vietnamese = True
-        cache_path = 'rok_qa_cache_vi.npz'
+        cache_path = 'train/rok_qa_cache_vi.npz'
         print('Sử dụng dữ liệu tiếng Việt.')
     else:
         use_vietnamese = False
-        cache_path = 'rok_qa_cache_en.npz'
+        cache_path = 'train/rok_qa_cache_en.npz'
         print('Sử dụng dữ liệu tiếng Anh.')
 
     if os.path.exists(cache_path):
@@ -81,10 +61,8 @@ def main():
         qa_embeddings, qa_questions, qa_answers = load_cache(cache_path)
         model = SentenceTransformer(model_name)
     else:
-        print('Đang build embeddings, lần đầu sẽ hơi lâu...')
-        qa_questions, qa_answers = load_qa_data(csv_path, use_vietnamese=use_vietnamese)
-        model, qa_embeddings = build_embeddings(qa_questions, model_name)
-        save_cache(cache_path, qa_embeddings, qa_questions, qa_answers)
+        print('Không tìm thấy cache. Vui lòng chạy train/train.py để build cache trước.')
+        return
     spell = Speller(lang='en')
     if vi_correction is None:
         print('Cảnh báo: Không có model sửa lỗi chính tả tiếng Việt.')
