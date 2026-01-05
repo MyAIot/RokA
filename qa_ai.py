@@ -9,6 +9,8 @@ except Exception as e:
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+# ...existing code...
+from gemini_suggest import GeminiClient
 
 
 
@@ -42,19 +44,9 @@ def answer_mc_question(user_question, choices, model, qa_questions, qa_answers, 
 
 def main():
     model_name = 'sentence-transformers/all-mpnet-base-v2'
-    # Chọn ngôn ngữ khi khởi động
-    print('Chọn ngôn ngữ dữ liệu:')
-    print('1. Tiếng Anh')
-    print('2. Tiếng Việt')
-    lang_choice = input('Nhập 1 hoặc 2 (mặc định 1): ').strip()
-    if lang_choice == '2':
-        use_vietnamese = True
-        cache_path = 'train/rok_qa_cache_vi.npz'
-        print('Sử dụng dữ liệu tiếng Việt.')
-    else:
-        use_vietnamese = False
-        cache_path = 'train/rok_qa_cache_en.npz'
-        print('Sử dụng dữ liệu tiếng Anh.')
+    cache_path = 'train/rok_qa_cache_en.npz'
+    gemini_api_key = "AIzaSyC0Iuwbc0GRe3v0clwxRqMNlEG_HXxXr48"
+    print('Sử dụng dữ liệu tiếng Anh.')
 
     if os.path.exists(cache_path):
         print('Đang load embeddings từ cache...')
@@ -73,6 +65,15 @@ def main():
         # Kiểm tra nếu có ký tự tiếng Việt phổ biến
         vietnamese_chars = set('ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ')
         return any(c in vietnamese_chars for c in text.lower())
+
+    gemini_client = GeminiClient(gemini_api_key)
+    # print("Các model Gemini khả dụng:")
+    # try:
+    #     models = gemini_client.list_models()
+    #     for m in models:
+    #         print(f"- {m}")
+    # except Exception as e:
+    #     print(f"Lỗi khi lấy danh sách model Gemini: {e}")
     while True:
         print("\n" + "="*50)
         print('Nhập câu hỏi (để trống để thoát):')
@@ -102,13 +103,20 @@ def main():
         matched_question, matched_answer, score = top_qas[0]
         bold_green = '\033[1;32m'
         print(f'Câu hỏi gần nhất: {matched_question}')
+
+
         print(f'Câu trả lời gợi ý: {bold_green}{matched_answer}{reset} (score: {score:.2f})')
+
+        gemini_response = gemini_client.generate(corrected_question)
+        orange = '\033[33m'  # Màu vàng/cam cơ bản
+        reset = '\033[0m'
+        print(f'Gemini AI trả lời: {orange}{gemini_response}{reset}')
         # Hiển thị thêm 2 câu và đáp án gần giống nhất tiếp theo (màu xanh nhạt)
-        light_green = '\033[0;32m'
-        for i in range(1, 3):
-            q, a, s = top_qas[i]
-            print(f'Gợi ý phụ #{i}: {q}')
-            print(f'{light_green}Đáp án phụ: {a}{reset} (score: {s:.2f})')
+        # light_green = '\033[0;32m'
+        # for i in range(1, 3):
+        #     q, a, s = top_qas[i]
+        #     print(f'Gợi ý phụ #{i}: {q}')
+        #     print(f'{light_green}Đáp án phụ: {a}{reset} (score: {s:.2f})')
 
 if __name__ == '__main__':
     main()

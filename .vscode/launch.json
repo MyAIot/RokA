@@ -2,6 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Debug qa_ai.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/qa_ai.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python: Debug extract_rok_qa.py",
             "type": "python",
             "request": "launch",
